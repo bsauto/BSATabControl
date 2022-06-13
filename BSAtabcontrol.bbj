@@ -1,12 +1,15 @@
 REM /**
 REM  * BSAtabcontrol.bbj
 REM  * @author roth
-REM  * tab control: designed for use in BUI
+REM  * version 1.0 : 2022-06-13
+REM  * 
+REM  *  -  basic implementation of a TabControl in plain BBj 
+REM  *  -  Designed for use in BUI (using tabcontrol wrapper class)
+REM  *  
 REM  */
 
 use ::bbwindowutils.bbj::BBWindowUtils
 
-rem TODO : placement left/right : OK
 rem TODO : events
 
 TEST:
