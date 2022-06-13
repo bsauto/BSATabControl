@@ -1,7 +1,7 @@
 REM /**
 REM  * BSAtabcontrol.bbj
 REM  * @author roth
-REM  * version 1.0 : 2022-06-13
+REM  * version 1.0 : 2022-06-13d 
 REM  * 
 REM  *  -  basic implementation of a TabControl in plain BBj 
 REM  *  -  Designed for use in BUI (using tabcontrol wrapper class)
@@ -44,9 +44,9 @@ class public BSATabControl extends BSATabControlBase
     
     field private BBjNumber m_tabPlacement=1
     
-    field private BBjNumber m_tabHeight=26
-    field private BBjNumber m_tabHeightHorizontal=26
-    field private BBjNumber m_tabHeightVertical=32
+    field private BBjNumber m_tabHeight=28
+    field private BBjNumber m_tabHeightHorizontal=28
+    field private BBjNumber m_tabHeightVertical=34
     
     
     field private BBjPopupMenu popmenu!
@@ -225,7 +225,7 @@ class public BSATabControl extends BSATabControlBase
         rem popupmenu
         #createPopupMenu()
         
-        #Font!=bbjapi().getSysGui().makeFont("Dialog",10,0)
+        #Font!=bbjapi().getSysGui().makeFont("Dialog",9,0)
         #Container!.setFont(#Font!)
         rem 
         #tabArea!.createGui()
@@ -328,6 +328,7 @@ class public BSATabControl extends BSATabControlBase
            
     methodend
     
+    rem delayed refresh: for changing multiple props in short time 
     method public void refreshDelayed()
         iv=.08
         tn$="refreshTIMER_TABCONTROL_"+#getUID()
@@ -364,6 +365,11 @@ class public BSATabControl extends BSATabControlBase
         #addTabPage("Tabpage 5")
         
         #getTabPage(1).setEnabled(0)
+        #getTabPage(3).setImage("warning.png")
+        #getTabPage(4).setText("Tabpage 5 (*)")
+        
+        
+        #getTabPage(3).setToolTipText("Tooltip text tabindex 3")
         
     methodend
     
@@ -501,6 +507,38 @@ class public BSATabControl extends BSATabControlBase
         methodret #m_tabHeightHorizontal
     methodend
     
+    rem ***  BBJ wrapper calls ***
+    method public void setTitleAt(BBjNumber index, BBjString title$)
+        declare BSATabControlTabPage tp!
+        tp!=#getTabPage(index)
+        if tp!=null() goto done
+        tp!.setText(title$)        
+        done:
+    methodend
+    
+    method public void setImageAt(BBjNumber index, BBjImage p_Image!)
+        declare BSATabControlTabPage tp!
+        tp!=#getTabPage(index)
+        if tp!=null() goto done
+        tp!.setImage(p_Image!)        
+        done:
+    methodend
+    
+    method public void setImageAt(BBjString p_imageFile$)
+        declare BSATabControlTabPage tp!
+        tp!=#getTabPage(index)
+        if tp!=null() goto done
+        tp!.setImage(p_imageFile$)        
+        done:
+    methodend
+
+    method public void setToolTipTextAt(BBjNumber p_Index, BBjString p_ToolTipText$)
+        declare BSATabControlTabPage tp!
+        tp!=#getTabPage(index)
+        if tp!=null() goto done
+        tp!.setToolTipText(p_ToolTipText$)        
+        done:
+    methodend
 
 classend
 
@@ -724,6 +762,11 @@ class public BSATabControlTabPage extends BSATabControlBase
         #refresh()
     methodend
     
+    method public void setToolTipText(BBjString p_toolTip$)
+        #super!.setToolTipText(p_toolTip$)
+        if #header!<>null() #header!.refresh()
+    methodend
+    
     
     
 classend
@@ -832,8 +875,8 @@ class public BSATabControlTabHeaderArea extends BSATabControlBase
         if tplc=BSATabControl.TAB_PLACEMENT_TOP() or tplc=BSATabControl.TAB_PLACEMENT_BOTTOM()
               contw=#getWidth()
               allw=#getAllTabHeaderWidths()
-              ? "tabheader widths  = ", allw
-              ? "container width = ",contw
+              rem ? "tabheader widths  = ", allw
+              rem ? "container width = ",contw
               
               if contw<allw+10 and allw>0 and contw>0
                   
@@ -880,6 +923,20 @@ class public BSATabControlTabHeaderArea extends BSATabControlBase
         fi
         
         
+    methodend
+    
+    method public void refreshDelayed()
+        tn$="resizeTimer"+"_BSATabControlTabArea"+#getUID()
+        bbjapi().removeTimer(tn$,err=*next)
+        iv=0.08
+        bbjapi().createTimer(tn$,iv,#this!,"cb_ResizeTimer")      
+        done:
+    methodend
+    
+    method public void cb_ResizeTimer(BBjTimerEvent e!)
+        tn$="resizeTimer"+"_BSATabControlTabArea"+#getUID()
+        bbjapi().removeTimer(tn$,err=*next)
+        #refresh()     
     methodend
     
     method private void Calculate()
@@ -1226,7 +1283,7 @@ class public BSATabControlTabPageHeader extends BSATabControlBase
         #button!.setFont(#tp!.getTabControl().getFont())
         #Container!.setFont(#button!.getFont())
         #button!.setCallback(#button!.ON_GAINED_FOCUS,#this!,"cb_TabButtonGainedFocus")
-        
+        #button!.setToolTipText(#getToolTipText())
         
         if #tp!.getTabControl().gettestMode()
             #setImage("taxsys.png")
@@ -1243,6 +1300,7 @@ class public BSATabControlTabPageHeader extends BSATabControlBase
         #markeractive!=#Container!.addChildWindow(id,mx,my,mw,mh,"",flags$,BBjAPI().getSysGui().getAvailableContext())
         #markeractive!.setDockLocation(#markeractive!.DOCK_BOTTOM)
         #markeractive!.setBackColor(new BBjColor(113,121,124))
+        rem #markeractive!.setBackColor(#Container!.getBackColor())
         
         rem top filler to make inactive tabs appear 'lower' and the active tab 'higher'
         rem this childwindow has same color as the tabarea
@@ -1391,7 +1449,7 @@ class public BSATabControlTabPageHeader extends BSATabControlBase
     method public void setImage(BBjString p_imageFile$)
         #m_imageFile$=p_imageFile$
         #m_imageVisible=1
-        if #button!<>null() #updateImageOnButton()
+        if #button!<>null() #updateImage()
     methodend
     
     method public void setImage(BBjImage p_image!)
@@ -1402,7 +1460,7 @@ class public BSATabControlTabPageHeader extends BSATabControlBase
         else
             #m_imageVisible=1
         fi
-        if #button!<>null() #updateImageOnButton()
+        if #button!<>null() #updateImage()
     methodend
     
     method public void setImageSize(BBjNumber p_ImageWidth,BBjNumber p_ImageHeight)
@@ -1411,11 +1469,14 @@ class public BSATabControlTabPageHeader extends BSATabControlBase
         fi
         #m_imageWidth=p_ImageWidth
         #m_imageHeight=p_ImageHeight
-        if #button!<>null() #updateImageOnButton()
+        if #button!<>null() #updateImage()
         
     methodend
     
-    method private void updateImageOnButton()
+    rem update the image
+    rem replace/set in the BBjImgCtrl control
+    rem when size is change: update total area/all tabs since it needs a recalc
+    method private void updateImage()
         
         if #m_imageFile$>""
             #m_image!=cast(BBjImage,bbjapi().getSysGui().getImageManager().loadImageFromFile(#m_imageFile$,err=done),err=done)
@@ -1429,8 +1490,9 @@ class public BSATabControlTabPageHeader extends BSATabControlBase
         #imgCtrl!.setVisible(1)
         
         if #m_imageSizeChanged
+            rem area needs recalc: so a bit of delay
             #m_imageSizeChanged=0
-            #tabArea!.refresh()
+            #tabArea!.refreshDelayed()
         else
             #refresh()
         fi
@@ -1456,6 +1518,8 @@ class public BSATabControlTabPageHeader extends BSATabControlBase
         rem if info(3,2)="roth"  print "size tab header to w = ",cw, " / h= ",ch
         
     
+        
+        
         rem textlabel
         if #textlabel!<>null() 
             declare BBjVector ldim!
@@ -1557,7 +1621,29 @@ class public BSATabControlTabPageHeader extends BSATabControlBase
             #getContainer().setEnabled(0)
         fi
         
+        rem if #getToolTipText()>"" and info(3,2)="roth" escape
+        if #button!<>null() 
+            #button!.setToolTipText(#getToolTipText())
+        fi
+        
     methodend
+    
+    method private void refreshDelayed()
+        tn$="resizeTimer"+"_BSATabControlTabPage"+#getUID()
+        bbjapi().removeTimer(tn$,err=*next)
+        iv=0.08
+        bbjapi().createTimer(tn$,iv,#this!,"cb_ResizeTimer")      
+        done:
+    methodend
+    
+    method public void cb_ResizeTimer(BBjTimerEvent e!)
+        tn$="resizeTimer"+"_BSATabControlTabPage"+#getUID()
+        bbjapi().removeTimer(tn$,err=*next)
+        #refresh()     
+    methodend
+    
+    
+    
     
     method public void setText(BBjString p_Text$)
     
@@ -1569,7 +1655,7 @@ class public BSATabControlTabPageHeader extends BSATabControlBase
         if #textlabel!=null() methodret
              
         #textlabel!.setText(p_Text$)
-        if curtext$<>p_text$ #refresh()
+        if curtext$<>p_text$ #refreshDelayed()
                   
         
     methodend
@@ -1715,6 +1801,14 @@ class public BSATabControlTabPageHeader extends BSATabControlBase
         #tp!.setEnabled(p_isEnabled)
     methodend
     
+    method public BBjString getToolTipText()
+        methodret #tp!.getToolTipText()
+    methodend
+    
+    method public void setToolTipText(BBjString p_toolTipText$)
+        #tp!.setToolTipText(p_toolTipText$)
+    methodend
+    
 classend
 
 class public BSATabControlBase
@@ -1736,6 +1830,8 @@ class public BSATabControlBase
     
     field private BBjNumber m_visible=1
     field private BBjNumber m_isEnabled=1
+    
+    field private BBjString m_toolTip$
     
     method public BSATabControlBase()
     methodend
@@ -1777,6 +1873,14 @@ class public BSATabControlBase
     
     method public BBjString getText()
         methodret #text$
+    methodend
+    
+    method public void setToolTipText(BBjString p_toolTip$)
+        #m_toolTip$=p_toolTip$
+    methodend
+    
+    method public BBjString getToolTipText()
+        methodret #m_toolTip$
     methodend
     
     method public BBjChildWindow getContainerAsChildWindow()
