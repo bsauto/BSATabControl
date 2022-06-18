@@ -24,7 +24,8 @@ tc!=new BSATabControl()
 tc!.settestMode(1)
 tc!.setCallBack(tc!.ON_TAB_SELECT(),new BSATabControlEventHelper(tc!),"cb_TAB_SELECT_CALLBACK_TESTER")
 rem tc!.setTheme(1)
-tc!.setTabPlacement(tc!.TAB_PLACEMENT_LEFT())
+tc!.setTabPlacement(tc!.TAB_PLACEMENT_TOP())
+tc!.setTabWidthLayoutType(BSATabControl.TAB_WIDTH_DIVIDE_EQUAL())
 tc!.doModal(1)
 release
 
@@ -54,9 +55,9 @@ class public BSATabControl extends BSATabControlBase
     field private BBjNumber m_oldPlacement=-1
     
     field private BBjNumber m_tabHeight=28
-    field private BBjNumber m_tabHeightHorizontal=26
+    field private BBjNumber m_tabHeightHorizontal=24
     field private BBjNumber m_tabHeightVertical=34
-    
+    field private BBjNumber m_tabwidthlayouttype
     
     field private BBjPopupMenu popmenu!
     field private BSATabControlEventHelper eventhelper!
@@ -69,12 +70,14 @@ class public BSATabControl extends BSATabControlBase
     field public  BBjChildWindow InnerContainer!
     
     rem border is on #Container!
-    field private BBjNumber m_borderWidth=1
+    field private BBjNumber m_borderWidth=24
     field private BBjColor  m_borderColor!
     field private BBjChildWindow borderTop!
     field private BBjChildWindow borderBottom!
     field private BBjChildWindow borderLeft!
     field private BBjChildWindow borderRight!
+    
+    field private BBjNumber m_fromToplevelresize=0
     
     rem constructor standalone
     method public BSATabControl()
@@ -110,6 +113,15 @@ class public BSATabControl extends BSATabControlBase
         methodret #m_borderWidth
     methodend
     
+    method public void setBorderWidth(BBjNumber p_BorderWidth)
+        #m_borderWidth=p_BorderWidth
+        if #borderTop!<>null() #borderTop!.setSize(0,p_BorderWidth)       
+        if #borderBottom!<>null() #borderBottom!.setSize(0,p_BorderWidth)
+        if #borderLeft!<>null() #borderLeft!.setSize(p_BorderWidth,0)
+        if #borderRight!<>null() #borderRight!.setSize(p_BorderWidth,0)
+        #refreshDelayed()
+    methodend
+    
     method public BBjNumber getTheme()
         methodret #m_theme
     methodend
@@ -120,6 +132,10 @@ class public BSATabControl extends BSATabControlBase
     
     method public BBjVector getTabPages()
         methodret #tabPages!
+    methodend
+        
+    method public BBjNumber getNumTabs()
+        methodret #getTabPages().size()
     methodend
     
     rem : 1 = top
@@ -144,8 +160,10 @@ class public BSATabControl extends BSATabControlBase
             #getTabArea().setSize(#getTabArea().getMaxPreferredWidth(),#getTabHeight())
             break
         case BSATabControl.TAB_PLACEMENT_TOP()
+            #getTabArea().setSize(0,#getTabHeight())
             break
         case BSATabControl.TAB_PLACEMENT_BOTTOM()
+            #getTabArea().setSize(0,#getTabHeight())
             break
         swend
         
@@ -172,7 +190,28 @@ class public BSATabControl extends BSATabControlBase
     
     method public static BBjNumber DEFAULT_TAB_WIDTH()
         methodret 120
-    methodend   
+    methodend 
+    
+    rem width based on text
+    method public static BBjNumber TAB_WIDTH_AUTOSIZE_TEXT()
+        methodret 0
+    methodend  
+    
+    rem all tabs get the same width
+    method public static BBjNumber TAB_WIDTH_DIVIDE_EQUAL()
+        methodret 1
+    methodend  
+    
+    rem tb width based on text (0) or all tabs same size (1)
+    method public void setTabWidthLayoutType(BBjNumber p_Type)
+        if p_Type<>0 and p_Type<>1 p_Type=0
+        #m_tabwidthlayouttype=p_Type
+        #refreshDelayed()
+    methodend
+    
+    method public BBjNumber getTabWidthLayoutType()
+        methodret #m_tabwidthlayouttype
+    methodend
     
     method public BSATabControlTabHeaderArea getTabArea()
         methodret #tabArea!
@@ -357,57 +396,42 @@ class public BSATabControl extends BSATabControlBase
         rem print tn$
         bbjapi().removeTimer(tn$,err=*next)
         iv=0.14;if info(3,6)="5" iv=0.24
-        bbjapi().createTimer(tn$,iv,#this!,"cb_ResizeTimer")      
+        bbjapi().createTimer(tn$,iv,#this!,"cb_ResizeTimer")  
+        #m_fromToplevelresize=1    
         done:
     methodend
     
     method public void cb_ResizeTimer(BBjTimerEvent e!)
         tn$="resizeTimer"+"_BSATabControl"+#getUID()     
         bbjapi().removeTimer(tn$,err=*next)
-        if info(3,2)="roth" print "resize after window size changed"        
+        rem if info(3,2)="roth" print "resize after window size changed"        
         #m_formresized=1
-        #setSize(#newWidth,#newHeight)     
+        #setSize(#newWidth,#newHeight) 
+        #m_fromToplevelresize=0   
     methodend
     
     rem set the size: and update the tab control contents
     method public void setSize(BBjNumber W, BBjNumber H)
         #super!.setSize(W,H)
-        print "Tabcontrol setSize to ",H, "  / ",H
+        rem print "Tabcontrol setSize to ",H, "  / ",H
     
-    
-        if 1=2
-        bw1=2*#m_borderWidth
-        bh1=2*#m_borderWidth
-        rem resize container...
-        if #isStandAlone=0 and #Container!<>null() 
-            cw=W-bw1
-            ch=H-bh1
-            #Container!.setSize(cw,ch)
-            print "set Container size to - > ",cw, "  / ",ch
+        rem focus cannot stay on tab: will cause jumping to different tab when resizing
+        ct=#getNumTabs()
+        declare BSATabControlTabPage tp!
+        if ct
+            for tab=0 to #getNumTabs()-1
+                tp!=#getTabPage(tab)
+                if tp!.getTabHeaderComponent().isButtonFocused() #getInnerContainer().focus();break
+            next tab
+            
         fi
         
-        rem resize inner container
-        iw=cw-(2*#m_borderWidth)
-        ih=ch-(2*#m_borderWidth)
-        
-        
-        plc=#getTabPlacement()
-        
-        if plc=BSATabControl.TAB_PLACEMENT_TOP() or plc=BSATabControl.TAB_PLACEMENT_BOTTOM()
-            ih=ih-#getTabArea().getHeight()
-        fi
-        
-        if #getInnerContainer()<>null()
-            #getInnerContainer().setSize(iw,ih)
-            print "set InnerContainer size to - > ",iw, "  / ",ih
-        fi
-        else
-            #sizeMainContainers()
-        fi
+       
+        #sizeMainContainers()
         
         rem update tabs and stuff
         #refresh()
-        
+               
         
     methodend
     
@@ -450,16 +474,34 @@ class public BSATabControl extends BSATabControlBase
         bw1=#m_borderWidth*2
         bh1=#m_borderWidth*2
         
-        print 'lf'
-        print "--- ** SIZE MAINCONTAINERS ** "
-        print "** SETSIZE TO w = ",#getWidth(), "  h = ",#getHeight()
-        #Container!.setSize(#getWidth()-bw1,#getHeight()-bh1)
+        rem print 'lf'
+        rem print "--- ** SIZE MAINCONTAINERS ** "
+        rem print "** SETSIZE TO w = ",#getWidth(), "  h = ",#getHeight()
+        
+        if #m_fromToplevelresize=0 or 1
+            #Container!.setSize(#getWidth()-bw1,#getHeight()-bh1)
+            rem print "resize outer container"
+        fi
+       
         
         iw=#getWidth()-bw1
         ih=#getHeight()-bh1-#tabArea!.getHeight()-1
+        
+        
+        if #getTabPlacement()=BSATabControl.TAB_PLACEMENT_RIGHT()            
+            iw=iw-#getTabArea().getWidth()
+        else
+            if #getTabPlacement()=BSATabControl.TAB_PLACEMENT_BOTTOM()
+                rem ih=ih-#getTabArea().getHeight()
+                rem print "innerhe : ",#getTabArea().getHeight()
+                rem ih=ih
+            fi
+        fi
+        
         #InnerContainer!.setSize(iw,ih)
         
         #m_formresized=0
+      
     
     methodend
     
@@ -609,7 +651,7 @@ class public BSATabControl extends BSATabControlBase
         bh1=#m_borderWidth*2
         
         if #getTabPlacement()=BSATabControl.TAB_PLACEMENT_TOP() or #getTabPlacement()=BSATabControl.TAB_PLACEMENT_BOTTOM()
-            methodret #getWidth()-bw1
+            methodret #getWidth()-bw1+1
         else
             rem print "#getWidth()  ",#getWidth()
             rem print "#getTabArea().getWidth() ",#getTabArea().getWidth()
@@ -1025,10 +1067,10 @@ class public BSATabControlTabHeaderArea extends BSATabControlBase
     
         if #getContainer()=null() methodret
         
-        print "refresh tab header area"
+        rem print "refresh tab header area"
         
-        print "tabheader area width  = ", #getWidth()
-        print "tabheader area height = ", #getHeight()
+        rem print "tabheader area width  = ", #getWidth()
+        rem print "tabheader area height = ", #getHeight()
         
         declare BSATabControlTabPage tp!
         
@@ -1071,7 +1113,10 @@ class public BSATabControlTabHeaderArea extends BSATabControlBase
               rem ? "tabheader widths  = ", allw
               rem ? "container width = ",contw
               
-              if contw<allw+10 and allw>0 and contw>0
+              offset=10
+              if #getTabControl().getTabWidthLayoutType()=BSATabControl.TAB_WIDTH_DIVIDE_EQUAL() offset=0
+              
+              if contw<allw+offset and allw>0 and contw>0
                   
                   if #tabSwitcherActive=1
                       #tabSwitcher!.doLayout()
@@ -1089,10 +1134,12 @@ class public BSATabControlTabHeaderArea extends BSATabControlBase
         else
                 rem left/right
                 mpw=#getMaxPreferredWidth()
+                w=#getWidth()                
                 if #getWidth()<>mpw or 1
                 
-                    #setSize(#getMaxPreferredWidth(),0)
-                    #getContainer().setSize(#getWidth(),0)
+                    
+                    #setSize(mpw,0)
+                    #getContainer().setSize(mpw,0)
                 
                     if tplc=BSATabControl.TAB_PLACEMENT_LEFT()
                         #getContainerAsChildWindow().setDockLocation(#getContainerAsChildWindow().DOCK_LEFT)
@@ -1143,9 +1190,12 @@ class public BSATabControlTabHeaderArea extends BSATabControlBase
         plc=#getTabControl().getTabPlacement()
         if plc=BSATabControl.TAB_PLACEMENT_LEFT() or plc=BSATabControl.TAB_PLACEMENT_RIGHT()
             W=#getMaxPreferredWidth()
-            #calcW=W
+            #calcW=W          
             #setSize(W,H)
-            
+        else
+            W=#getTabControl().getContentAreaWidth()
+            #calcW=W
+            #setSize(W,#getHeight())
         fi
         
     methodend
@@ -1166,6 +1216,7 @@ class public BSATabControlTabHeaderArea extends BSATabControlBase
         #tabSwitcherActive=0      
     methodend
     
+    rem width of all the tabheaders on text size
     method private BBjNumber getAllTabHeaderWidths()
         ct=#getTabControl().getTabPages().size()
         if ct=0 methodret 0
@@ -1174,7 +1225,7 @@ class public BSATabControlTabHeaderArea extends BSATabControlBase
         
         for j=0 to ct-1
             tp!=cast(BSATabControlTabPage,#getTabControl().getTabPages().getItem(j))
-            tpw=tp!.getTabHeaderComponent().getPreferredWidth()
+            tpw=tp!.getTabHeaderComponent().getPreferredWidth(1)
             w=w+tpw            
             
         next j
@@ -1287,7 +1338,7 @@ class public BSATabControlTabHeaderAreaTabSwitcher extends BSATabControlBase
         #Container!.setSize(w,h)
         #Container!.setVisible(1)
         
-        print "enable tab switcher"
+        rem print "enable tab switcher"
         
         
         rem hide default tabheader
@@ -1299,7 +1350,7 @@ class public BSATabControlTabHeaderAreaTabSwitcher extends BSATabControlBase
     
      method public void disable()
         
-        print "disable tab switcher"
+        rem print "disable tab switcher"
         
         
         
@@ -1326,18 +1377,22 @@ class public BSATabControlTabHeaderAreaTabSwitcher extends BSATabControlBase
     method public void doLayout()
         #showAllTabHeaders(0)
         
-        w=#gettabArea().getWidth()
+        
+        w=#gettabArea().getWidth()-(2*#getTabControl().getBorderWidth())
         h=#gettabArea().getHeight()
-        print "  w= ",w , " h = ",h 
+        rem print "tabarea layout:   w= ",w , " h = ",h 
         #Container!.setSize(w,h)
         
         #checkListButtonItems()
         if #lb!<>null()
-          w=#tabArea!.getWidth()-8
+          w=w-8
           h=#lb!.getHeight()
+          
+          rem print "listbutton layout:   w= ",w , " h = ",h 
           #lb!.setSize(w,h)
           rem #lb!.set
         fi
+        
         rem #tabArea!.getContainer().setVisible(0)
     methodend
     
@@ -1395,6 +1450,8 @@ class public BSATabControlTabPageHeader extends BSATabControlBase
     
     field private BSATabControlEventHelper  eventHelper!
     
+    
+    field private BBjNumber             m_useActiveMarker=0
     field private BBjChildWindow        markeractive!
     field private BBjChildWindow        topfillerInactive!
     field private BBjChildWindow        lineLeft!
@@ -1480,6 +1537,7 @@ class public BSATabControlTabPageHeader extends BSATabControlBase
         #Container!.setFont(#button!.getFont())
         #button!.setCallback(#button!.ON_GAINED_FOCUS,#this!,"cb_TabButtonGainedFocus")
         #button!.setToolTipText(#getToolTipText())
+        #button!.setName("TABHEADER_BUTTON_"+#getUID())
         
         if #tp!.getTabControl().gettestMode()
             #setImage("taxsys.png")
@@ -1491,11 +1549,12 @@ class public BSATabControlTabPageHeader extends BSATabControlBase
         flags$=IOR(flags$,$00010000$);rem tab traversable
         flags$=ior(flags$,$00000010$);rem "invisible"
         id=#Container!.getAvailableControlID()
-        mw=2
-        mh=2
+        mw=0
+        mh=0
         #markeractive!=#Container!.addChildWindow(id,mx,my,mw,mh,"",flags$,BBjAPI().getSysGui().getAvailableContext())
         #markeractive!.setDockLocation(#markeractive!.DOCK_BOTTOM)
         #markeractive!.setBackColor(new BBjColor(113,121,124))
+        #markeractive!.setVisible(0)
         rem #markeractive!.setBackColor(#Container!.getBackColor())
         
         rem top filler to make inactive tabs appear 'lower' and the active tab 'higher'
@@ -1563,6 +1622,14 @@ class public BSATabControlTabPageHeader extends BSATabControlBase
         ret!.addItem(lw)
         ret!.addItem(lh)
         methodret ret!
+    methodend
+    
+    method public BBjNumber isButtonFocused()
+        if #button!=null() methodret 0
+        if #getContainer().getFocusedControl().getName()=#button!.getName()
+            methodret 1
+        fi
+        methodret 0
     methodend
     
     method private BBjNumber imageActive()
@@ -1678,7 +1745,7 @@ class public BSATabControlTabPageHeader extends BSATabControlBase
         plc=#getTabControl().getTabPlacement()
         rem if plc=BSATabControl.TAB_PLACEMENT_LEFT() or plc=BSATabControl.TAB_PLACEMENT_RIGHT() 
         
-        #imgCtrl!.setImage(#m_image!)
+        #imgCtrl!.setImage(#m_image!,err=*next)
         #imgCtrl!.setSize(#m_imageWidth,#m_imageHeight)
         #imgCtrl!.setVisible(1)
         
@@ -1695,7 +1762,7 @@ class public BSATabControlTabPageHeader extends BSATabControlBase
     
     rem gained focus: activate the tab
     method public void cb_TabButtonGainedFocus(BBjGainedFocusEvent e!)
-        if info(3,2)="roth" print "focus = ", #tp!.getTabIndex()
+        rem if info(3,2)="roth" print "focus = ", #tp!.getTabIndex()
         if #getTabControl().getSelectedIndex()=#tp!.getTabIndex() methodret
         #getTabControl().setSelectedIndex(#tp!.getTabIndex())
         #eventHelper!.raiseEventTabSelected(#tp!.getTabIndex())
@@ -1872,9 +1939,15 @@ class public BSATabControlTabPageHeader extends BSATabControlBase
         
         if p_selected
            
-            if #markeractive!<>null() 
-                #markeractive!.setVisible(1)
-                #markeractive!.setSize(2,2)
+           
+            if #m_useActiveMarker
+                if #markeractive!<>null() 
+                    #markeractive!.setVisible(1)
+                    #markeractive!.setSize(2,2)
+                fi
+            else
+                #markeractive!.setVisible(0)
+                #markeractive!.setSize(0,0)
             fi
             
             if #topfillerInactive!<>null() #topfillerInactive!.setSize(0,0) 
@@ -1937,11 +2010,28 @@ class public BSATabControlTabPageHeader extends BSATabControlBase
         
     methodend
     
+  
     rem return the width for 1 tab
-    method public BBjNumber getPreferredWidth()
+    method public BBjNumber getPreferredWidth(BBjNumber p_forceTextWidth)
     
         if #button!=null() methodret 0
         
+        
+        rem top/border and tabs have equal width...
+        plc=#getTabControl().getTabPlacement()
+        if p_forceTextWidth=0 and #getTabControl().getTabWidthLayoutType()=BSATabControl.TAB_WIDTH_DIVIDE_EQUAL() and (plc=BSATabControl.TAB_PLACEMENT_TOP() or plc=BSATabControl.TAB_PLACEMENT_BOTTOM())
+            ttw=#gettabArea().getWidth()-(2*#getTabControl().getBorderWidth())
+            if ttw=0 methodret 0
+            numtabs=#getTabControl().getNumTabs()
+            if numtabs=0 methodret 0
+            tw=ttw/numtabs
+            tw=int(tw)
+            tw=tw
+            rem print "Tabwidth equal = ",tw
+            methodret tw
+        fi
+        
+        rem default: based on text
         defwidth=48
         if #tp!=null() methodret defwidth
         text$=#tp!.getText()
@@ -1965,8 +2055,10 @@ class public BSATabControlTabPageHeader extends BSATabControlBase
         rem print "pref wdth : ",ret
         methodret int(ret)
         
-        
-        
+    methodend
+    
+    method public BBjNumber getPreferredWidth()
+        methodret #getPreferredWidth(0)
     methodend
     
     method private BBjNumber getPreferredHeight()
@@ -2146,13 +2238,13 @@ class public BSATabControlEventHelper
     methodend
     
     method public void enableEventTabSelect()
-        print #getUID()
+        rem print #getUID()
         #m_CALLBACK_ON_TAB_SELECT=1
     methodend
     
     
     method public void raiseEventTabSelected(BBjNumber p_index)
-        if info(3,2)="roth" print "raise event"
+        rem if info(3,2)="roth" print "raise event"
         if #m_CALLBACK_ON_TAB_SELECT=0 methodret 
         declare BSATabSelectedEvent e!
         e!=new BSATabSelectedEvent(p_index)
@@ -2211,6 +2303,10 @@ classend
 class public BSATabControlTester1
 
     field private BSATabControl tc!
+    field private BSATabControl childTab!
+    
+    field private BBjNumber newWidth
+    field private BBjNumber newHeight
 
     method public BSATabControlTester1()
         declare BBjSysGui sg!
@@ -2245,7 +2341,10 @@ class public BSATabControlTester1
             offset=0
             TW=W-(12*2)
             TH=H-(12*2)-offset
+            
             #tc!=new BSATabControl(tlw!.getAvailableControlID(),tlw!,12,12,TW,TH)
+            #tc!.setTabWidthLayoutType(BSATabControl.TAB_WIDTH_DIVIDE_EQUAL())
+            
             #tc!.settestMode(1)
             #tc!.addTabPage("Tabppage 1")
             #tc!.addTabPage("Tabppage 2")
@@ -2254,16 +2353,35 @@ class public BSATabControlTester1
             #tc!.setImageAt(1,"folder.png")
             #tc!.setImageAt(2,"error.png")
             BBWindowUtils.centerWindow(tlw!)
-        
+            
+            rem child tab
+            id=#tc!.getTabPage(0).getContainer().getAvailableControlID()
+            cw=#tc!.getContentAreaWidth()
+            ch=#tc!.getContentAreaHeight()
+            #childTab!=new BSATabControl(id, #tc!.getTabPage(0).getContainer(),0,0,cw,ch)
+            #childTab!.settestMode(1)
+            #childTab!.setTabPlacement(#childTab!.TAB_PLACEMENT_LEFT())
+            #childTab!.setBorderWidth(0)
+            
+            #childTab!.addTabPage("Tabppage 1")
+            #childTab!.setImageAt(0,"config.png")
+            #childTab!.addTabPage("Tabppage 2")
+            #childTab!.setImageAt(1,"database.png")
+            #childTab!.addTabPage("Tabppage 3")
+            #childTab!.setImageAt(2,"info.png")
+            #childTab!.addTabPage("Tabppage 4")
+            #childTab!.setImageAt(3,"samba.png")
+            
+            
             tlw!.setVisible(1)
             
         
-            ? "tab x/y = ", #tc!.getX(), " / ",#tc!.getY()
+            rem ? "tab x/y = ", #tc!.getX(), " / ",#tc!.getY()
             
-            ? tlw!.getOuterHeight()
-            ? tlw!.getHeight()
-            print #tc!.getHeight()
-            print #tc!.getContainer().getHeight()
+            rem ? tlw!.getOuterHeight()
+            rem ? tlw!.getHeight()
+            rem print #tc!.getHeight()
+            rem print #tc!.getContainer().getHeight()
             
             process_events
         
@@ -2275,12 +2393,27 @@ class public BSATabControlTester1
     
     method public void cb_winResize(BBjResizeEvent e!)
         if e!.isAdjusting() goto done
-        X=12
-        Y=12
-        W=e!.getWidth()-24
-        H=e!.getHeight()-24
-        #tc!.setLocation(X,Y)
-        #tc!.setSize(W,H)
+      
+        #newWidth=e!.getWidth()-24
+        #newHeight=e!.getHeight()-24
+        tn$="resizeTimer"+"_BSATabControlTest"+str(#this!)
+        rem print tn$
+        bbjapi().removeTimer(tn$,err=*next)
+        iv=0.14;if info(3,6)="5" iv=0.24
+        bbjapi().createTimer(tn$,iv,#this!,"cb_ResizeTimer")  
+        
+        done:
+    methodend
+    
+    method public void cb_ResizeTimer(BBjTimerEvent e!)
+        tn$="resizeTimer"+"_BSATabControlTest"+str(#this!)
+        bbjapi().removeTimer(tn$,err=*next)
+        #tc!.setSize(#newWidth,#newHeight)   
+        
+        cw=#tc!.getContentAreaWidth()
+        ch=#tc!.getContentAreaHeight()
+        #childTab!.setSize(cw,ch)
+             
         done:
     methodend
     
